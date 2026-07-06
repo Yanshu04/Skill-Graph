@@ -1,0 +1,865 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useMemo } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import {
+     6→  BarChart,
+     7→  Bar,
+     8→  XAxis,
+     9→  YAxis,
+    10→  PieChart,
+    11→  Pie,
+    12→  Cell,
+    13→  ResponsiveContainer,
+    14→  Tooltip as RechartsTooltip,
+    15→} from 'recharts';
+    16→import { formatDistanceToNow } from 'date-fns';
+    17→import {
+    18→  Brain,
+    19→  FolderCode,
+    20→  Award,
+    21→  Briefcase,
+    22→  Sparkles,
+    23→  PlusCircle,
+    24→  CheckCircle2,
+    25→  GraduationCap,
+    26→  TrendingUp,
+    27→  ShieldCheck,
+    28→  ShieldAlert,
+    29→  ShieldX,
+    30→} from 'lucide-react';
+    31→import { Skeleton } from '@/components/ui/skeleton';
+    32→import { Progress } from '@/components/ui/progress';
+    33→import { Badge } from '@/components/ui/badge';
+    34→import {
+    35→  ChartContainer,
+    36→  ChartTooltip,
+    37→  ChartTooltipContent,
+    38→  ChartLegend,
+    39→  ChartLegendContent,
+    40→  type ChartConfig,
+    41→} from '@/components/ui/chart';
+    42→import { cn } from '@/lib/utils';
+    43→
+    44→// ─── Types ───────────────────────────────────────────────────────────────────
+    45→
+    46→interface Skill {
+    47→  id: string;
+    48→  name: string;
+    49→  category: string;
+    50→  proficiency: number;
+    51→  verification: string;
+    52→  confidence: number;
+    53→  lastSeen: string;
+    54→  parentRelations?: unknown[];
+    55→  childRelations?: unknown[];
+    56→}
+    57→
+    58→interface Project {
+    59→  id: string;
+    60→  name: string;
+    61→  description: string;
+    62→  technologies: string;
+    63→  complexity: string;
+    64→  difficulty: string;
+    65→  githubUrl: string | null;
+    66→  skills: unknown[];
+    67→}
+    68→
+    69→interface Certificate {
+    70→  id: string;
+    71→  [key: string]: unknown;
+    72→}
+    73→
+    74→interface Experience {
+    75→  id: string;
+    76→  [key: string]: unknown;
+    77→}
+    78→
+    79→interface LearningEvent {
+    80→  id: string;
+    81→  type: string;
+    82→  title: string;
+    83→  description?: string;
+    84→  timestamp: string;
+    85→  [key: string]: unknown;
+    86→}
+    87→
+    88→interface CareerTarget {
+    89→  id: string;
+    90→  [key: string]: unknown;
+    91→}
+    92→
+    93→// ─── Constants ───────────────────────────────────────────────────────────────
+    94→
+    95→const CATEGORY_COLORS: Record<string, string> = {
+    96→  'Frontend': '#10b981',
+    97→  'Backend': '#f59e0b',
+    98→  'DevOps': '#8b5cf6',
+    99→  'Database': '#ec4899',
+   100→  'Language': '#06b6d4',
+   101→  'Framework': '#f97316',
+   102→  'Tool': '#14b8a6',
+   103→  'Soft Skill': '#a78bfa',
+   104→  'Design': '#fb7185',
+   105→  'Testing': '#38bdf8',
+   106→  'Security': '#fbbf24',
+   107→  'AI/ML': '#c084fc',
+   108→};
+   109→
+   110→const FALLBACK_CATEGORY_COLOR = '#6b7280';
+   111→
+   112→const DONUT_COLORS = [
+   113→  '#10b981',
+   114→  '#f59e0b',
+   115→  '#8b5cf6',
+   116→  '#ec4899',
+   117→  '#06b6d4',
+   118→  '#f97316',
+   119→  '#14b8a6',
+   120→  '#a78bfa',
+   121→  '#fb7185',
+   122→  '#38bdf8',
+   123→  '#fbbf24',
+   124→  '#c084fc',
+   125→];
+   126→
+   127→// ─── Animation Variants ─────────────────────────────────────────────────────
+   128→
+   129→const containerVariants = {
+   130→  hidden: { opacity: 0 },
+   131→  visible: {
+   132→    opacity: 1,
+   133→    transition: { staggerChildren: 0.08, delayChildren: 0.1 },
+   134→  },
+   135→};
+   136→
+   137→const itemVariants = {
+   138→  hidden: { opacity: 0, y: 20 },
+   139→  visible: {
+   140→    opacity: 1,
+   141→    y: 0,
+   142→    transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+   143→  },
+   144→};
+   145→
+   146→// ─── Sub-components ─────────────────────────────────────────────────────────
+   147→
+   148→function DashboardSkeleton() {
+   149→  return (
+   150→    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+   151→      {/* Skill Score skeleton - hero */}
+   152→      <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-center justify-center col-span-1 md:col-span-2 lg:col-span-1 lg:row-span-2">
+   153→        <Skeleton className="h-48 w-48 rounded-full" />
+   154→        <Skeleton className="mt-4 h-6 w-32" />
+   155→        <Skeleton className="mt-2 h-4 w-48" />
+   156→      </div>
+   157→
+   158→      {/* Career Readiness skeleton */}
+   159→      <div className="bg-card border border-border rounded-xl p-6">
+   160→        <Skeleton className="h-5 w-36 mb-4" />
+   161→        <Skeleton className="h-3 w-full mb-2" />
+   162→        <Skeleton className="h-2 w-full rounded-full mb-3" />
+   163→        <Skeleton className="h-4 w-24" />
+   164→      </div>
+   165→
+   166→      {/* AI Insight skeleton */}
+   167→      <div className="bg-card border border-border rounded-xl p-6">
+   168→        <Skeleton className="h-5 w-28 mb-4" />
+   169→        <Skeleton className="h-4 w-full mb-2" />
+   170→        <Skeleton className="h-4 w-3/4 mb-2" />
+   171→        <Skeleton className="h-4 w-5/6" />
+   172→      </div>
+   173→
+   174→      {/* Quick Stats skeleton - 4 cards */}
+   175→      {Array.from({ length: 4 }).map((_, i) => (
+   176→        <div key={i} className="bg-card border border-border rounded-xl p-6">
+   177→          <div className="flex items-center gap-3">
+   178→            <Skeleton className="h-10 w-10 rounded-lg" />
+   179→            <div>
+   180→              <Skeleton className="h-3 w-16 mb-1" />
+   181→              <Skeleton className="h-6 w-10" />
+   182→            </div>
+   183→          </div>
+   184→        </div>
+   185→      ))}
+   186→
+   187→      {/* Skills Overview skeleton */}
+   188→      <div className="bg-card border border-border rounded-xl p-6 md:col-span-2">
+   189→        <Skeleton className="h-5 w-36 mb-4" />
+   190→        <Skeleton className="h-[200px] w-full" />
+   191→      </div>
+   192→
+   193→      {/* Skills by Category skeleton */}
+   194→      <div className="bg-card border border-border rounded-xl p-6">
+   195→        <Skeleton className="h-5 w-40 mb-4" />
+   196→        <Skeleton className="h-[200px] w-full rounded-full" />
+   197→      </div>
+   198→
+   199→      {/* Recent Activity skeleton */}
+   200→      <div className="bg-card border border-border rounded-xl p-6 md:col-span-2 lg:col-span-1">
+   201→        <Skeleton className="h-5 w-36 mb-4" />
+   202→        {Array.from({ length: 5 }).map((_, i) => (
+   203→          <div key={i} className="flex items-center gap-3 mb-3">
+   204→            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+   205→            <div className="flex-1">
+   206→              <Skeleton className="h-4 w-full max-w-[200px] mb-1" />
+   207→              <Skeleton className="h-3 w-20" />
+   208→            </div>
+   209→          </div>
+   210→        ))}
+   211→      </div>
+   212→
+   213→      {/* Verification Breakdown skeleton */}
+   214→      <div className="bg-card border border-border rounded-xl p-6 md:col-span-2 lg:col-span-2">
+   215→        <Skeleton className="h-5 w-48 mb-4" />
+   216→        <Skeleton className="h-6 w-full rounded-full mb-3" />
+   217→        <div className="flex gap-4">
+   218→          <Skeleton className="h-4 w-24" />
+   219→          <Skeleton className="h-4 w-28" />
+   220→          <Skeleton className="h-4 w-24" />
+   221→        </div>
+   222→      </div>
+   223→    </div>
+   224→  );
+   225→}
+   226→
+   227→// ─── Widget 1: Overall Skill Score (Hero) ───────────────────────────────────
+   228→
+   229→function OverallSkillScore({ skills }: { skills: Skill[] }) {
+   230→  const avgProficiency = useMemo(() => {
+   231→    if (skills.length === 0) return 0;
+   232→    return Math.round(skills.reduce((sum, s) => sum + s.proficiency, 0) / skills.length);
+   233→  }, [skills]);
+   234→
+   235→  const circumference = 2 * Math.PI * 80;
+   236→  const strokeDashoffset = circumference - (avgProficiency / 100) * circumference;
+   237→
+   238→  return (
+   239→    <motion.div
+   240→      variants={itemVariants}
+   241→      className="glass rounded-xl p-6 flex flex-col items-center justify-center col-span-1 md:col-span-2 lg:col-span-1 lg:row-span-2 min-h-[320px]"
+   242→    >
+   243→      <div className="relative">
+   244→        <svg width="200" height="200" viewBox="0 0 200 200" className="transform -rotate-90">
+   245→          <defs>
+   246→            <linearGradient id="emeraldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+   247→              <stop offset="0%" stopColor="#10b981" />
+   248→              <stop offset="50%" stopColor="#34d399" />
+   249→              <stop offset="100%" stopColor="#6ee7b7" />
+   250→            </linearGradient>
+   251→          </defs>
+   252→          {/* Background ring */}
+   253→          <circle
+   254→            cx="100"
+   255→            cy="100"
+   256→            r="80"
+   257→            fill="none"
+   258→            stroke="currentColor"
+   259→            strokeWidth="8"
+   260→            className="text-muted/30"
+   261→          />
+   262→          {/* Progress ring */}
+   263→          <circle
+   264→            cx="100"
+   265→            cy="100"
+   266→            r="80"
+   267→            fill="none"
+   268→            stroke="url(#emeraldGradient)"
+   269→            strokeWidth="8"
+   270→            strokeLinecap="round"
+   271→            strokeDasharray={circumference}
+   272→            strokeDashoffset={strokeDashoffset}
+   273→            className="transition-all duration-1000 ease-out"
+   274→          />
+   275→        </svg>
+   276→        {/* Center text */}
+   277→        <div className="absolute inset-0 flex flex-col items-center justify-center rotate-0">
+   278→          <span className="text-5xl font-bold text-emerald-400 tabular-nums">
+   279→            {avgProficiency}
+   280→          </span>
+   281→          <span className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">
+   282→            out of 100
+   283→          </span>
+   284→        </div>
+   285→      </div>
+   286→      <h3 className="text-lg font-semibold text-foreground mt-4">Overall Skill Score</h3>
+   287→      <p className="text-sm text-muted-foreground mt-1">
+   288→        Average across {skills.length} skill{skills.length !== 1 ? 's' : ''}
+   289→      </p>
+   290→    </motion.div>
+   291→  );
+   292→}
+   293→
+   294→// ─── Widget 2: Career Readiness ─────────────────────────────────────────────
+   295→
+   296→function CareerReadiness({
+   297→  skills,
+   298→  projects,
+   299→  certificates,
+   300→}: {
+   301→  skills: Skill[];
+   302→  projects: Project[];
+   303→  certificates: Certificate[];
+   304→}) {
+   305→  const { score, label, description } = useMemo(() => {
+   306→    const s = skills.length;
+   307→    const p = projects.length;
+   308→    const c = certificates.length;
+   309→    const raw =
+   310→      Math.min(s * 2, 40) +
+   311→      Math.min(p * 10, 30) +
+   312→      Math.min(c * 10, 20) +
+   313→      (s > 0 ? Math.min(Math.round(skills.filter((sk) => sk.verification === 'verified').length / s * 10), 10) : 0);
+   314→
+   315→    const score = Math.min(raw, 100);
+   316→
+   317→    if (score < 20) return { score, label: 'Getting Started', description: 'Add more skills and projects to build your profile' };
+   318→    if (score < 40) return { score, label: 'Building Foundation', description: 'Good start! Keep adding skills and earn certificates' };
+   319→    if (score < 60) return { score, label: 'Growing Strong', description: 'Solid progress! Focus on skill verification' };
+   320→    if (score < 80) return { score, label: 'Career Ready', description: 'Impressive portfolio! Fine-tune your skills' };
+   321→    return { score, label: 'Expert Level', description: 'Outstanding profile! You are industry-ready' };
+   322→  }, [skills, projects, certificates]);
+   323→
+   324→  return (
+   325→    <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   326→      <div className="flex items-center gap-2 mb-4">
+   327→        <TrendingUp className="h-5 w-5 text-amber-400" />
+   328→        <h3 className="text-sm font-semibold text-foreground">Career Readiness</h3>
+   329→      </div>
+   330→      <div className="space-y-3">
+   331→        <div className="flex items-end justify-between">
+   332→          <span className="text-3xl font-bold text-amber-400 tabular-nums">{score}%</span>
+   333→          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/20 hover:bg-amber-500/25">
+   334→            {label}
+   335→          </Badge>
+   336→        </div>
+   337→        <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted/50">
+   338→          <div
+   339→            className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-1000 ease-out"
+   340→            style={{ width: `${score}%` }}
+   341→          />
+   342→        </div>
+   343→        <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+   344→      </div>
+   345→    </motion.div>
+   346→  );
+   347→}
+   348→
+   349→// ─── Widget 3: Skills Overview (Bar Chart) ──────────────────────────────────
+   350→
+   351→const skillsChartConfig = {
+   352→  proficiency: {
+   353→    label: 'Proficiency',
+   354→    color: '#10b981',
+   355→  },
+   356→} satisfies ChartConfig;
+   357→
+   358→function SkillsOverview({ skills }: { skills: Skill[] }) {
+   359→  const chartData = useMemo(() => {
+   360→    return [...skills]
+   361→      .sort((a, b) => b.proficiency - a.proficiency)
+   362→      .slice(0, 8)
+   363→      .map((s) => ({
+   364→        name: s.name.length > 14 ? s.name.slice(0, 13) + '…' : s.name,
+   365→        fullName: s.name,
+   366→        proficiency: s.proficiency,
+   367→        fill: CATEGORY_COLORS[s.category] || FALLBACK_CATEGORY_COLOR,
+   368→        category: s.category,
+   369→      }));
+   370→  }, [skills]);
+   371→
+   372→  if (chartData.length === 0) {
+   373→    return (
+   374→      <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover md:col-span-2">
+   375→        <h3 className="text-sm font-semibold text-foreground mb-4">Skills Overview</h3>
+   376→        <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">
+   377→          No skills data yet
+   378→        </div>
+   379→      </motion.div>
+   380→    );
+   381→  }
+   382→
+   383→  return (
+   384→    <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover md:col-span-2">
+   385→      <h3 className="text-sm font-semibold text-foreground mb-4">Top Skills by Proficiency</h3>
+   386→      <ChartContainer config={skillsChartConfig} className="h-[200px] w-full">
+   387→        <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 4 }}>
+   388→          <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} stroke="currentColor" className="text-muted-foreground" />
+   389→          <YAxis
+   390→            dataKey="name"
+   391→            type="category"
+   392→            width={90}
+   393→            tick={{ fontSize: 11 }}
+   394→            stroke="currentColor"
+   395→            className="text-muted-foreground"
+   396→          />
+   397→          <ChartTooltip
+   398→            content={
+   399→              <ChartTooltipContent
+   400→                formatter={(value, name, item) => (
+   401→                  <div className="flex items-center gap-2">
+   402→                    <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: item.payload.fill }} />
+   403→                    <span className="text-muted-foreground">{item.payload.fullName}</span>
+   404→                    <span className="text-foreground font-mono font-medium tabular-nums">{value}%</span>
+   405→                  </div>
+   406→                )}
+   407→              />
+   408→            }
+   409→          />
+   410→          <Bar dataKey="proficiency" radius={[0, 4, 4, 0]} />
+   411→        </BarChart>
+   412→      </ChartContainer>
+   413→    </motion.div>
+   414→  );
+   415→}
+   416→
+   417→// ─── Widget 4: Recent Activity ──────────────────────────────────────────────
+   418→
+   419→function getActivityIcon(type: string) {
+   420→  switch (type) {
+   421→    case 'skill_added':
+   422→      return <PlusCircle className="h-4 w-4 text-emerald-400" />;
+   423→    case 'project_completed':
+   424→      return <CheckCircle2 className="h-4 w-4 text-cyan-400" />;
+   425→    case 'certification_earned':
+   426→      return <GraduationCap className="h-4 w-4 text-amber-400" />;
+   427→    case 'career_growth':
+   428→      return <TrendingUp className="h-4 w-4 text-purple-400" />;
+   429→    default:
+   430→      return <Sparkles className="h-4 w-4 text-pink-400" />;
+   431→  }
+   432→}
+   433→
+   434→function getActivityBgColor(type: string) {
+   435→  switch (type) {
+   436→    case 'skill_added':
+   437→      return 'bg-emerald-500/10';
+   438→    case 'project_completed':
+   439→      return 'bg-cyan-500/10';
+   440→    case 'certification_earned':
+   441→      return 'bg-amber-500/10';
+   442→    case 'career_growth':
+   443→      return 'bg-purple-500/10';
+   444→    default:
+   445→      return 'bg-pink-500/10';
+   446→  }
+   447→}
+   448→
+   449→function RecentActivity({ events }: { events: LearningEvent[] }) {
+   450→  if (events.length === 0) {
+   451→    return (
+   452→      <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   453→        <h3 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h3>
+   454→        <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+   455→          No recent activity
+   456→        </div>
+   457→      </motion.div>
+   458→    );
+   459→  }
+   460→
+   461→  return (
+   462→    <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   463→      <h3 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h3>
+   464→      <div className="space-y-3">
+   465→        {events.slice(0, 5).map((event) => {
+   466→          let relativeTime = '';
+   467→          try {
+   468→            relativeTime = formatDistanceToNow(new Date(event.timestamp), { addSuffix: true });
+   469→          } catch {
+   470→            relativeTime = 'recently';
+   471→          }
+   472→
+   473→          return (
+   474→            <div key={event.id} className="flex items-center gap-3 group">
+   475→              <div className={cn('h-8 w-8 rounded-full flex items-center justify-center shrink-0 transition-colors', getActivityBgColor(event.type))}>
+   476→                {getActivityIcon(event.type)}
+   477→              </div>
+   478→              <div className="flex-1 min-w-0">
+   479→                <p className="text-sm text-foreground truncate group-hover:text-emerald-400 transition-colors">
+   480→                  {event.title}
+   481→                </p>
+   482→                <p className="text-xs text-muted-foreground">{relativeTime}</p>
+   483→              </div>
+   484→            </div>
+   485→          );
+   486→        })}
+   487→      </div>
+   488→    </motion.div>
+   489→  );
+   490→}
+   491→
+   492→// ─── Widget 5: Skills by Category (Donut) ───────────────────────────────────
+   493→
+   494→const categoryChartConfig: ChartConfig = {
+   495→  count: { label: 'Skills' },
+   496→};
+   497→
+   498→function SkillsByCategory({ skills }: { skills: Skill[] }) {
+   499→  const chartData = useMemo(() => {
+   500→    const catMap = new Map<string, number>();
+   501→    skills.forEach((s) => {
+   502→      catMap.set(s.category, (catMap.get(s.category) || 0) + 1);
+   503→    });
+   504→    return Array.from(catMap.entries())
+   505→      .map(([category, count], idx) => ({
+   506→        category,
+   507→        count,
+   508→        fill: CATEGORY_COLORS[category] || DONUT_COLORS[idx % DONUT_COLORS.length],
+   509→      }))
+   510→      .sort((a, b) => b.count - a.count);
+   511→  }, [skills]);
+   512→
+   513→  const dynamicConfig = useMemo(() => {
+   514→    const cfg: ChartConfig = {};
+   515→    chartData.forEach((d) => {
+   516→      cfg[d.category] = { label: d.category, color: d.fill };
+   517→    });
+   518→    return cfg;
+   519→  }, [chartData]);
+   520→
+   521→  if (chartData.length === 0) {
+   522→    return (
+   523→      <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   524→        <h3 className="text-sm font-semibold text-foreground mb-4">Skills by Category</h3>
+   525→        <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">
+   526→          No skills data yet
+   527→        </div>
+   528→      </motion.div>
+   529→    );
+   530→  }
+   531→
+   532→  return (
+   533→    <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   534→      <h3 className="text-sm font-semibold text-foreground mb-2">Skills by Category</h3>
+   535→      <ChartContainer config={dynamicConfig} className="h-[180px] w-full">
+   536→        <PieChart>
+   537→          <ChartTooltip content={<ChartTooltipContent nameKey="category" />} />
+   538→          <Pie
+   539→            data={chartData}
+   540→            dataKey="count"
+   541→            nameKey="category"
+   542→            cx="50%"
+   543→            cy="50%"
+   544→            innerRadius={45}
+   545→            outerRadius={70}
+   546→            paddingAngle={3}
+   547→            strokeWidth={0}
+   548→          >
+   549→            {chartData.map((entry, index) => (
+   550→              <Cell key={`cell-${index}`} fill={entry.fill} />
+   551→            ))}
+   552→          </Pie>
+   553→          <ChartLegend content={<ChartLegendContent nameKey="category" />} />
+   554→        </PieChart>
+   555→      </ChartContainer>
+   556→    </motion.div>
+   557→  );
+   558→}
+   559→
+   560→// ─── Widget 6: Quick Stats ──────────────────────────────────────────────────
+   561→
+   562→const statItems = [
+   563→  { key: 'skills', label: 'Total Skills', icon: Brain, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+   564→  { key: 'projects', label: 'Projects', icon: FolderCode, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+   565→  { key: 'certificates', label: 'Certificates', icon: Award, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+   566→  { key: 'experiences', label: 'Experiences', icon: Briefcase, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+   567→] as const;
+   568→
+   569→function QuickStats({
+   570→  skills,
+   571→  projects,
+   572→  certificates,
+   573→  experiences,
+   574→}: {
+   575→  skills: Skill[];
+   576→  projects: Project[];
+   577→  certificates: Certificate[];
+   578→  experiences: Experience[];
+   579→}) {
+   580→  const counts = {
+   581→    skills: skills.length,
+   582→    projects: projects.length,
+   583→    certificates: certificates.length,
+   584→    experiences: experiences.length,
+   585→  };
+   586→
+   587→  return (
+   588→    <>
+   589→      {statItems.map((stat) => {
+   590→        const Icon = stat.icon;
+   591→        return (
+   592→          <motion.div key={stat.key} variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   593→            <div className="flex items-center gap-3">
+   594→              <div className={cn('h-10 w-10 rounded-lg flex items-center justify-center', stat.bg)}>
+   595→                <Icon className={cn('h-5 w-5', stat.color)} />
+   596→              </div>
+   597→              <div>
+   598→                <p className="text-xs text-muted-foreground font-medium">{stat.label}</p>
+   599→                <p className={cn('text-2xl font-bold tabular-nums', stat.color)}>{counts[stat.key]}</p>
+   600→              </div>
+   601→            </div>
+   602→          </motion.div>
+   603→        );
+   604→      })}
+   605→    </>
+   606→  );
+   607→}
+   608→
+   609→// ─── Widget 7: AI Insight ───────────────────────────────────────────────────
+   610→
+   611→function generateInsight(
+   612→  skills: Skill[],
+   613→  projects: Project[],
+   614→  certificates: Certificate[]
+   615→): string {
+   616→  if (skills.length === 0) {
+   617→    return "Start by adding your first skill to build your career intelligence profile. Every skill you track helps paint a clearer picture of your strengths.";
+   618→  }
+   619→
+   620→  const categories = new Set(skills.map((s) => s.category));
+   621→  const verifiedCount = skills.filter((s) => s.verification === 'verified').length;
+   622→  const avgProficiency = Math.round(skills.reduce((s, sk) => s + sk.proficiency, 0) / skills.length);
+   623→
+   624→  // Check for skills without verification
+   625→  if (verifiedCount === 0 && skills.length > 3) {
+   626→    return `You have ${skills.length} skills tracked but none are verified. Consider getting certifications or building projects to validate your expertise — verified skills carry more weight with employers.`;
+   627→  }
+   628→
+   629→  // Check for category imbalances
+   630→  const categoryCounts = skills.reduce<Record<string, number>>((acc, s) => {
+   631→    acc[s.category] = (acc[s.category] || 0) + 1;
+   632→    return acc;
+   633→  }, {});
+   634→
+   635→  const dominant = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
+   636→  if (dominant.length >= 1 && categories.size <= 2 && skills.length > 5) {
+   637→    return `Your skills are concentrated in ${categories.size} categor${categories.size === 1 ? 'y' : 'ies'} (${dominant[0][0]}). Diversifying across more categories can make you a more well-rounded professional.`;
+   638→  }
+   639→
+   640→  // Check for low proficiency skills
+   641→  const lowProfSkills = skills.filter((s) => s.proficiency < 40);
+   642→  if (lowProfSkills.length > 3) {
+   643→    return `You have ${lowProfSkills.length} skills below 40% proficiency. Focus on deepening your expertise in these areas rather than adding new skills — depth often beats breadth.`;
+   644→  }
+   645→
+   646→  // Check for project-to-skill ratio
+   647→  if (skills.length > 5 && projects.length < 2) {
+   648→    return `You've tracked ${skills.length} skills but only have ${projects.length} project${projects.length === 1 ? '' : 's'}. Building real projects is the best way to demonstrate your skills to potential employers.`;
+   649→  }
+   650→
+   651→  // Check for certificates
+   652→  if (skills.length > 8 && certificates.length === 0) {
+   653→    return `With ${skills.length} skills in your profile, formal certifications could significantly boost your credibility. Consider earning certificates in your strongest areas.`;
+   654→  }
+   655→
+   656→  // Positive feedback
+   657→  if (avgProficiency > 70 && verifiedCount > 2) {
+   658→    return `Impressive! Your average proficiency is ${avgProficiency}% with ${verifiedCount} verified skills. You're building a strong, validated skill set. Keep pushing toward expert-level mastery.`;
+   659→  }
+   660→
+   661→  return `You're tracking ${skills.length} skills across ${categories.size} categor${categories.size === 1 ? 'y' : 'ies'}. ${projects.length > 0 ? `With ${projects.length} project${projects.length === 1 ? '' : 's'} completed, ` : ''}you're building a solid professional profile. Consistency is key!`;
+   662→}
+   663→
+   664→function AIInsight({
+   665→  skills,
+   666→  projects,
+   667→  certificates,
+   668→}: {
+   669→  skills: Skill[];
+   670→  projects: Project[];
+   671→  certificates: Certificate[];
+   672→}) {
+   673→  const insight = useMemo(
+   674→    () => generateInsight(skills, projects, certificates),
+   675→    [skills, projects, certificates]
+   676→  );
+   677→
+   678→  return (
+   679→    <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   680→      <div className="flex items-center gap-2 mb-3">
+   681→        <Sparkles className="h-5 w-5 text-emerald-400" />
+   682→        <h3 className="text-sm font-semibold text-foreground">AI Insight</h3>
+   683→      </div>
+   684→      <p className="text-sm text-muted-foreground leading-relaxed">{insight}</p>
+   685→    </motion.div>
+   686→  );
+   687→}
+   688→
+   689→// ─── Widget 8: Verification Breakdown ───────────────────────────────────────
+   690→
+   691→function VerificationBreakdown({ skills }: { skills: Skill[] }) {
+   692→  const breakdown = useMemo(() => {
+   693→    const verified = skills.filter((s) => s.verification === 'verified').length;
+   694→    const partial = skills.filter((s) => s.verification === 'partially_verified').length;
+   695→    const self = skills.filter((s) => s.verification === 'self_reported').length;
+   696→    const total = skills.length;
+   697→    return { verified, partial, self, total };
+   698→  }, [skills]);
+   699→
+   700→  if (breakdown.total === 0) {
+   701→    return (
+   702→      <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   703→        <div className="flex items-center gap-2 mb-4">
+   704→          <ShieldCheck className="h-5 w-5 text-emerald-400" />
+   705→          <h3 className="text-sm font-semibold text-foreground">Verification Breakdown</h3>
+   706→        </div>
+   707→        <p className="text-sm text-muted-foreground">No skills to display</p>
+   708→      </motion.div>
+   709→    );
+   710→  }
+   711→
+   712→  const verifiedPct = Math.round((breakdown.verified / breakdown.total) * 100);
+   713→  const partialPct = Math.round((breakdown.partial / breakdown.total) * 100);
+   714→  const selfPct = 100 - verifiedPct - partialPct;
+   715→
+   716→  return (
+   717→    <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
+   718→      <div className="flex items-center gap-2 mb-4">
+   719→        <ShieldCheck className="h-5 w-5 text-emerald-400" />
+   720→        <h3 className="text-sm font-semibold text-foreground">Verification Breakdown</h3>
+   721→      </div>
+   722→
+   723→      {/* Stacked bar */}
+   724→      <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted/50 mb-3">
+   725→        {breakdown.verified > 0 && (
+   726→          <div
+   727→            className="bg-emerald-500 transition-all duration-700"
+   728→            style={{ width: `${verifiedPct}%` }}
+   729→          />
+   730→        )}
+   731→        {breakdown.partial > 0 && (
+   732→          <div
+   733→            className="bg-amber-500 transition-all duration-700"
+   734→            style={{ width: `${partialPct}%` }}
+   735→          />
+   736→        )}
+   737→        {breakdown.self > 0 && (
+   738→          <div
+   739→            className="bg-muted-foreground/40 transition-all duration-700"
+   740→            style={{ width: `${selfPct}%` }}
+   741→          />
+   742→        )}
+   743→      </div>
+   744→
+   745→      <div className="flex flex-wrap gap-x-5 gap-y-2">
+   746→        <div className="flex items-center gap-1.5">
+   747→          <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+   748→          <span className="text-xs text-muted-foreground">
+   749→            Verified <span className="text-foreground font-medium tabular-nums">{breakdown.verified}</span>
+   750→          </span>
+   751→        </div>
+   752→        <div className="flex items-center gap-1.5">
+   753→          <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
+   754→          <span className="text-xs text-muted-foreground">
+   755→            Partial <span className="text-foreground font-medium tabular-nums">{breakdown.partial}</span>
+   756→          </span>
+   757→        </div>
+   758→        <div className="flex items-center gap-1.5">
+   759→          <ShieldX className="h-3.5 w-3.5 text-muted-foreground" />
+   760→          <span className="text-xs text-muted-foreground">
+   761→            Self-reported <span className="text-foreground font-medium tabular-nums">{breakdown.self}</span>
+   762→          </span>
+   763→        </div>
+   764→      </div>
+   765→    </motion.div>
+   766→  );
+   767→}
+   768→
+   769→// ─── Main Dashboard Component ───────────────────────────────────────────────
+   770→
+   771→export function Dashboard() {
+   772→  const [loading, setLoading] = useState(true);
+   773→  const [skills, setSkills] = useState<Skill[]>([]);
+   774→  const [projects, setProjects] = useState<Project[]>([]);
+   775→  const [certificates, setCertificates] = useState<Certificate[]>([]);
+   776→  const [experiences, setExperiences] = useState<Experience[]>([]);
+   777→  const [learningEvents, setLearningEvents] = useState<LearningEvent[]>([]);
+   778→  const [careerTargets, setCareerTargets] = useState<CareerTarget[]>([]);
+   779→
+   780→  useEffect(() => {
+   781→    async function fetchData() {
+   782→      try {
+   783→        const endpoints = [
+   784→          { url: '/api/skills', setter: setSkills as (d: unknown[]) => void },
+   785→          { url: '/api/projects', setter: setProjects as (d: unknown[]) => void },
+   786→          { url: '/api/certificates', setter: setCertificates as (d: unknown[]) => void },
+   787→          { url: '/api/experiences', setter: setExperiences as (d: unknown[]) => void },
+   788→          { url: '/api/learning-events', setter: setLearningEvents as (d: unknown[]) => void },
+   789→          { url: '/api/career-targets', setter: setCareerTargets as (d: unknown[]) => void },
+   790→        ];
+   791→
+   792→        await Promise.allSettled(
+   793→          endpoints.map(async ({ url, setter }) => {
+   794→            const res = await fetch(url);
+   795→            if (res.ok) {
+   796→              const data = await res.json();
+   797→              setter(Array.isArray(data) ? data : []);
+   798→            }
+   799→          })
+   800→        );
+   801→      } catch {
+   802→        // Silently handle errors — widgets will show empty states
+   803→      } finally {
+   804→        setLoading(false);
+   805→      }
+   806→    }
+   807→
+   808→    fetchData();
+   809→  }, []);
+   810→
+   811→  if (loading) {
+   812→    return (
+   813→      <div className="p-4 md:p-6">
+   814→        <DashboardSkeleton />
+   815→      </div>
+   816→    );
+   817→  }
+   818→
+   819→  return (
+   820→    <motion.div
+   821→      variants={containerVariants}
+   822→      initial="hidden"
+   823→      animate="visible"
+   824→      className="p-4 md:p-6"
+   825→    >
+   826→      <motion.div variants={itemVariants} className="mb-6">
+   827→        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+   828→        <p className="text-sm text-muted-foreground mt-1">
+   829→          Your career intelligence at a glance
+   830→        </p>
+   831→      </motion.div>
+   832→
+   833→      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+   834→        {/* Hero: Overall Skill Score */}
+   835→        <OverallSkillScore skills={skills} />
+   836→
+   837→        {/* Career Readiness */}
+   838→        <CareerReadiness skills={skills} projects={projects} certificates={certificates} />
+   839→
+   840→        {/* AI Insight */}
+   841→        <AIInsight skills={skills} projects={projects} certificates={certificates} />
+   842→
+   843→        {/* Quick Stats */}
+   844→        <QuickStats
+   845→          skills={skills}
+   846→          projects={projects}
+   847→          certificates={certificates}
+   848→          experiences={experiences}
+   849→        />
+   850→
+   851→        {/* Skills Overview (Bar Chart) */}
+   852→        <SkillsOverview skills={skills} />
+   853→
+   854→        {/* Skills by Category (Donut) */}
+   855→        <SkillsByCategory skills={skills} />
+   856→
+   857→        {/* Recent Activity */}
+   858→        <RecentActivity events={learningEvents} />
+   859→
+   860→        {/* Verification Breakdown */}
+   861→        <VerificationBreakdown skills={skills} />
+   862→      </div>
+   863→    </motion.div>
+   864→  );
+   865→}

@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String?
+  name        String?
+  image       String?
+  headline    String?
+  bio         String?
+  location    String?
+  website     String?
+  github      String?
+  linkedin    String?
+  twitter     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  skills         Skill[]
+  projects       Project[]
+  certificates   Certificate[]
+  experiences    Experience[]
+  careerTargets  CareerTarget[]
+  learningEvents LearningEvent[]
+  resumeFiles    ResumeFile[]
+}
+
+model Skill {
+  id                 String   @id @default(cuid())
+  name               String
+  category           String   @default("Other")
+  proficiency        Int      @default(50)
+  verification       String   @default("self_reported")
+  verificationSource String?
+  confidence         Float    @default(0.5)
+  lastSeen           DateTime @default(now())
+  userId             String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentRelations SkillRelation[]  @relation("SkillRelationFrom")
+  childRelations  SkillRelation[]  @relation("SkillRelationTo")
+  projects        ProjectSkill[]
+}
+
+model SkillRelation {
+  id           String   @id @default(cuid())
+  fromSkillId  String
+  toSkillId    String
+  relationType String   @default("related_to")
+  createdAt    DateTime @default(now())
+
+  fromSkill Skill @relation("SkillRelationFrom", fields: [fromSkillId], references: [id], onDelete: Cascade)
+  toSkill   Skill @relation("SkillRelationTo", fields: [toSkillId], references: [id], onDelete: Cascade)
+
+  @@unique([fromSkillId, toSkillId, relationType])
+}
+
+model Project {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  technologies  String    @default("[]")
+  architecture  String?
+  complexity    String    @default("medium")
+  difficulty    Int       @default(50)
+  documentation String?
+  testing       String?
+  githubUrl     String?
+  liveUrl       String?
+  startDate     DateTime?
+  endDate       DateTime?
+  userId        String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills  ProjectSkill[]
+}
+
+model ProjectSkill {
+  id        String  @id @default(cuid())
+  projectId String
+  skillId   String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, skillId])
+}
+
+model Certificate {
+  id              String    @id @default(cuid())
+  title           String
+  issuingOrg      String?
+  completionDate  DateTime?
+  skills          String    @default("[]")
+  imageUrl        String?
+  userId          String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Experience {
+  id          String    @id @default(cuid())
+  title       String
+  company     String?
+  startDate   DateTime
+  endDate     DateTime?
+  description String?
+  userId      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CareerTarget {
+  id           String   @id @default(cuid())
+  role         String
+  targetSkills String   @default("[]")
+  matchScore   Float?
+  userId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LearningEvent {
+  id          String   @id @default(cuid())
+  type        String   @default("skill_added")
+  title       String
+  description String?
+  date        DateTime
+  metadata    String?
+  userId      String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ResumeFile {
+  id       String   @id @default(cuid())
+  filename String
+  content  String?
+  skills   String?
+  userId   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
