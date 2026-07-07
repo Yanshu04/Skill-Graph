@@ -10,6 +10,8 @@ export type AppPage =
   | "timeline" 
   | "certificates" 
   | "profile"
+  | "portfolio"
+  | "career-targets"
   | "resume";
 
 export interface UserProfile {

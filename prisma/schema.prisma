@@ -20,6 +20,7 @@ model User {
   github      String?
   linkedin    String?
   twitter     String?
+  isPublic    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -33,35 +34,40 @@ model User {
 }
 
 model Skill {
-  id                 String   @id @default(cuid())
+  id                 String         @id @default(cuid())
   name               String
-  category           String   @default("Other")
-  proficiency        Int      @default(50)
-  verification       String   @default("self_reported")
+  category           String         @default("Other")
+  proficiency        Int            @default(50)
+  verification       String         @default("self_reported")
   verificationSource String?
-  confidence         Float    @default(0.5)
-  lastSeen           DateTime @default(now())
+  confidence         Float          @default(0.5)
+  lastSeen           DateTime       @default(now())
   userId             String
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parentRelations SkillRelation[]  @relation("SkillRelationFrom")
-  childRelations  SkillRelation[]  @relation("SkillRelationTo")
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentRelations SkillEdge[]    @relation("SkillEdgeFrom")
+  childRelations  SkillEdge[]    @relation("SkillEdgeTo")
   projects        ProjectSkill[]
+
+  // Embedding stored as JSON string for local SQLite dev; use pgvector column in production
+  embedding       String?
 }
 
-model SkillRelation {
+model SkillEdge {
   id           String   @id @default(cuid())
-  fromSkillId  String
-  toSkillId    String
-  relationType String   @default("related_to")
+  fromId       String   @map("from_id")
+  toId         String   @map("to_id")
+  relationType String   @default("related_to") @map("relation_type")
+  weight       Float    @default(1.0)
   createdAt    DateTime @default(now())
 
-  fromSkill Skill @relation("SkillRelationFrom", fields: [fromSkillId], references: [id], onDelete: Cascade)
-  toSkill   Skill @relation("SkillRelationTo", fields: [toSkillId], references: [id], onDelete: Cascade)
+  fromSkill Skill @relation("SkillEdgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toSkill   Skill @relation("SkillEdgeTo", fields: [toId], references: [id], onDelete: Cascade)
 
-  @@unique([fromSkillId, toSkillId, relationType])
+  @@unique([fromId, toId, relationType])
+  @@map("skill_edges")
 }
 
 model Project {
@@ -126,13 +132,15 @@ model Experience {
 }
 
 model CareerTarget {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   role         String
-  targetSkills String   @default("[]")
+  company      String?
+  deadline     DateTime?
+  targetSkills String    @default("[]")
   matchScore   Float?
   userId       String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -151,11 +159,12 @@ model LearningEvent {
 }
 
 model ResumeFile {
-  id       String   @id @default(cuid())
-  filename String
-  content  String?
-  skills   String?
-  userId   String
+  id        String   @id @default(cuid())
+  filename  String
+  fileUrl   String?
+  content   String?
+  skills    String?
+  userId    String
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

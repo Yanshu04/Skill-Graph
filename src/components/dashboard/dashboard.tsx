@@ -495,19 +495,32 @@ const categoryChartConfig: ChartConfig = {
   count: { label: 'Skills' },
 };
 
+const MAX_SLICES = 7; // show top N categories; the rest become "Other"
+
 function SkillsByCategory({ skills }: { skills: Skill[] }) {
-  const chartData = useMemo(() => {
+  const { chartData, totalSkills } = useMemo(() => {
     const catMap = new Map<string, number>();
     skills.forEach((s) => {
       catMap.set(s.category, (catMap.get(s.category) || 0) + 1);
     });
-    return Array.from(catMap.entries())
+
+    const sorted = Array.from(catMap.entries())
       .map(([category, count], idx) => ({
         category,
         count,
         fill: CATEGORY_COLORS[category] || DONUT_COLORS[idx % DONUT_COLORS.length],
       }))
       .sort((a, b) => b.count - a.count);
+
+    // Group tail categories into "Other"
+    if (sorted.length > MAX_SLICES) {
+      const top = sorted.slice(0, MAX_SLICES);
+      const otherCount = sorted.slice(MAX_SLICES).reduce((sum, d) => sum + d.count, 0);
+      top.push({ category: 'Other', count: otherCount, fill: FALLBACK_CATEGORY_COLOR });
+      return { chartData: top, totalSkills: skills.length };
+    }
+
+    return { chartData: sorted, totalSkills: skills.length };
   }, [skills]);
 
   const dynamicConfig = useMemo(() => {
@@ -531,28 +544,55 @@ function SkillsByCategory({ skills }: { skills: Skill[] }) {
 
   return (
     <motion.div variants={itemVariants} className="bg-card border border-border rounded-xl p-6 card-hover">
-      <h3 className="text-sm font-semibold text-foreground mb-2">Skills by Category</h3>
-      <ChartContainer config={dynamicConfig} className="h-[180px] w-full">
-        <PieChart>
-          <ChartTooltip content={<ChartTooltipContent nameKey="category" />} />
-          <Pie
-            data={chartData}
-            dataKey="count"
-            nameKey="category"
-            cx="50%"
-            cy="50%"
-            innerRadius={45}
-            outerRadius={70}
-            paddingAngle={3}
-            strokeWidth={0}
-          >
-            {chartData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.fill} />
-            ))}
-          </Pie>
-          <ChartLegend content={<ChartLegendContent nameKey="category" />} />
-        </PieChart>
-      </ChartContainer>
+      <h3 className="text-sm font-semibold text-foreground mb-4">Skills by Category</h3>
+      <div className="flex flex-col gap-4">
+        {/* Donut chart */}
+        <ChartContainer config={dynamicConfig} className="h-[160px] w-full">
+          <PieChart>
+            <ChartTooltip
+              content={<ChartTooltipContent nameKey="category" hideLabel={false} />}
+            />
+            <Pie
+              data={chartData}
+              dataKey="count"
+              nameKey="category"
+              cx="50%"
+              cy="50%"
+              innerRadius={48}
+              outerRadius={68}
+              paddingAngle={2}
+              strokeWidth={0}
+            >
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ChartContainer>
+
+        {/* Custom compact legend — wraps into rows, never overflows */}
+        <div className="flex flex-wrap gap-x-4 gap-y-2 justify-center">
+          {chartData.map((entry) => (
+            <div key={entry.category} className="flex items-center gap-1.5 min-w-0">
+              <span
+                className="flex-shrink-0 h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: entry.fill }}
+              />
+              <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                {entry.category}
+              </span>
+              <span className="text-xs font-medium text-foreground tabular-nums">
+                {entry.count}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Total */}
+        <p className="text-center text-xs text-muted-foreground">
+          {totalSkills} skill{totalSkills !== 1 ? 's' : ''} across {chartData.length} categor{chartData.length !== 1 ? 'ies' : 'y'}
+        </p>
+      </div>
     </motion.div>
   );
 }

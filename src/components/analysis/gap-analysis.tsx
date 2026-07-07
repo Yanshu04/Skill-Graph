@@ -55,12 +55,15 @@ interface AnalysisResult {
     priority: 'high' | 'medium' | 'low';
     estimatedWeeks: number;
     reason: string;
+    citesGap?: string;
   }[];
   recommendedProjects: {
     name: string;
     difficulty: 'beginner' | 'intermediate' | 'advanced';
     skillsNeeded: string[];
+    skills?: string[];
     description: string;
+    citesGap?: string;
   }[];
   overallAssessment: string;
   readinessLevel: 'high' | 'medium' | 'low';
@@ -208,6 +211,13 @@ export function GapAnalysis() {
   useEffect(() => {
     async function fetchAll() {
       try {
+        // Check for pre-filled role from career targets
+        const prefilled = sessionStorage.getItem('skillgraph_target_role');
+        if (prefilled) {
+          setRoleInput(prefilled);
+          sessionStorage.removeItem('skillgraph_target_role');
+        }
+
         const [skillsRes, targetsRes] = await Promise.allSettled([
           fetch('/api/skills'),
           fetch('/api/career-targets'),
@@ -445,13 +455,13 @@ export function GapAnalysis() {
                 <div className="text-center text-sm text-muted-foreground space-y-1">
                   <p>
                     <span className="text-emerald-400 font-semibold">
-                      {results.matchedSkills.length}
+                      {(results.matchedSkills || []).length}
                     </span>{' '}
                     matched
                   </p>
                   <p>
                     <span className="text-rose-400 font-semibold">
-                      {results.missingSkills.length}
+                      {(results.missingSkills || []).length}
                     </span>{' '}
                     missing
                   </p>
@@ -483,11 +493,11 @@ export function GapAnalysis() {
                       variant="outline"
                       className="ml-auto text-[10px] text-emerald-400 border-emerald-500/30"
                     >
-                      {results.matchedSkills.length}
+                      {(results.matchedSkills || []).length}
                     </Badge>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {results.matchedSkills.map((s) => (
+                    {(results.matchedSkills || []).map((s) => (
                       <Badge
                         key={s}
                         className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25"
@@ -509,11 +519,11 @@ export function GapAnalysis() {
                       variant="outline"
                       className="ml-auto text-[10px] text-rose-400 border-rose-500/30"
                     >
-                      {results.missingSkills.length}
+                      {(results.missingSkills || []).length}
                     </Badge>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {results.missingSkills.map((s) => (
+                    {(results.missingSkills || []).map((s) => (
                       <Badge
                         key={s}
                         className="bg-rose-500/15 text-rose-400 border-rose-500/30 hover:bg-rose-500/25"
@@ -536,7 +546,7 @@ export function GapAnalysis() {
                     <h4 className="text-sm font-semibold">Strengths</h4>
                   </div>
                   <ul className="space-y-3">
-                    {results.strengths.map((s, i) => (
+                    {(results.strengths || []).map((s, i) => (
                       <li key={i} className="flex items-start gap-3 text-sm">
                         <div className="mt-0.5 flex-shrink-0 rounded-full bg-emerald-500/15 p-1">
                           <Check className="size-3 text-emerald-400" />
@@ -555,7 +565,7 @@ export function GapAnalysis() {
                     <h4 className="text-sm font-semibold">Weaknesses</h4>
                   </div>
                   <ul className="space-y-3">
-                    {results.weaknesses.map((w, i) => (
+                    {(results.weaknesses || []).map((w, i) => (
                       <li key={i} className="flex items-start gap-3 text-sm">
                         <div className="mt-0.5 flex-shrink-0 rounded-full bg-rose-500/15 p-1">
                           <X className="size-3 text-rose-400" />
@@ -571,14 +581,14 @@ export function GapAnalysis() {
             <Separator className="bg-border" />
 
             {/* Suggested Learning Order */}
-            {results.suggestedLearningOrder.length > 0 && (
+            {(results.suggestedLearningOrder || []).length > 0 && (
               <motion.div variants={itemVariants} className="space-y-4">
                 <div className="flex items-center gap-2">
                   <BookOpen className="size-5 text-emerald-400" />
                   <h3 className="text-lg font-semibold">Suggested Learning Order</h3>
                 </div>
                 <div className="space-y-3">
-                  {results.suggestedLearningOrder.map((item, idx) => (
+                  {(results.suggestedLearningOrder || []).map((item, idx) => (
                     <motion.div
                       key={item.skill}
                       variants={itemVariants}
@@ -599,6 +609,11 @@ export function GapAnalysis() {
                             <p className="text-xs text-muted-foreground mt-1">
                               {item.reason}
                             </p>
+                            {item.citesGap && (
+                              <p className="text-[10px] text-rose-400 font-medium mt-1">
+                                Addresses Gap: {item.citesGap}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground sm:flex-shrink-0">
@@ -614,14 +629,14 @@ export function GapAnalysis() {
             )}
 
             {/* Recommended Projects */}
-            {results.recommendedProjects.length > 0 && (
+            {(results.recommendedProjects || []).length > 0 && (
               <motion.div variants={itemVariants} className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Zap className="size-5 text-amber-400" />
                   <h3 className="text-lg font-semibold">Recommended Projects</h3>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {results.recommendedProjects.map((proj) => (
+                  {(results.recommendedProjects || []).map((proj) => (
                     <motion.div
                       key={proj.name}
                       variants={itemVariants}
@@ -634,8 +649,13 @@ export function GapAnalysis() {
                       <p className="text-xs text-muted-foreground leading-relaxed">
                         {proj.description}
                       </p>
+                      {proj.citesGap && (
+                        <p className="text-[10px] text-rose-400 font-medium">
+                          Addresses Gap: {proj.citesGap}
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5">
-                        {proj.skillsNeeded.map((s) => (
+                        {(proj.skillsNeeded || proj.skills || []).map((s) => (
                           <Badge
                             key={s}
                             variant="outline"

@@ -11,7 +11,7 @@ export async function GET() {
       select: {
         id: true, email: true, name: true, image: true,
         headline: true, bio: true, location: true, website: true,
-        github: true, linkedin: true, twitter: true,
+        github: true, linkedin: true, twitter: true, isPublic: true,
       },
     });
     return NextResponse.json(user);
@@ -37,13 +37,14 @@ export async function PUT(request: NextRequest) {
         ...(body.github !== undefined && { github: body.github }),
         ...(body.linkedin !== undefined && { linkedin: body.linkedin }),
         ...(body.twitter !== undefined && { twitter: body.twitter }),
+        ...(body.isPublic !== undefined && { isPublic: body.isPublic }),
       },
     });
 
     return NextResponse.json({
       id: user.id, email: user.email, name: user.name, image: user.image,
       headline: user.headline, bio: user.bio, location: user.location, website: user.website,
-      github: user.github, linkedin: user.linkedin, twitter: user.twitter,
+      github: user.github, linkedin: user.linkedin, twitter: user.twitter, isPublic: user.isPublic,
     });
   } catch {
     return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });

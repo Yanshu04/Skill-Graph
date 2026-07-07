@@ -18,7 +18,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
@@ -56,6 +55,9 @@ interface Project {
   difficulty: number;
   githubUrl: string | null;
   liveUrl: string | null;
+  architecture: string | null;
+  documentation: string | null;
+  testing: string | null;
   skills: ProjectSkill[];
 }
 
@@ -73,6 +75,9 @@ type FormData = {
   difficulty: number;
   githubUrl: string;
   liveUrl: string;
+  architecture: string;
+  documentation: string;
+  testing: string;
   skillIds: string[];
 };
 
@@ -84,6 +89,9 @@ const emptyForm: FormData = {
   difficulty: 5,
   githubUrl: '',
   liveUrl: '',
+  architecture: '',
+  documentation: '',
+  testing: '',
   skillIds: [],
 };
 
@@ -145,6 +153,7 @@ export function ProjectManager() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showcaseProject, setShowcaseProject] = useState<Project | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -184,12 +193,15 @@ export function ProjectManager() {
     setEditingId(p.id);
     setForm({
       name: p.name,
-      description: p.description,
+      description: p.description || '',
       technologies: parseTechnologies(p.technologies).join(', '),
       complexity: p.complexity,
       difficulty: p.difficulty,
       githubUrl: p.githubUrl ?? '',
       liveUrl: p.liveUrl ?? '',
+      architecture: p.architecture ?? '',
+      documentation: p.documentation ?? '',
+      testing: p.testing ?? '',
       skillIds: p.skills.map((ps) => ps.skill.id),
     });
     setDialogOpen(true);
@@ -215,6 +227,9 @@ export function ProjectManager() {
       difficulty: form.difficulty,
       githubUrl: form.githubUrl.trim() || null,
       liveUrl: form.liveUrl.trim() || null,
+      architecture: form.architecture.trim() || null,
+      documentation: form.documentation.trim() || null,
+      testing: form.testing.trim() || null,
       startDate: new Date().toISOString(),
       endDate: new Date().toISOString(),
       skillIds: form.skillIds,
@@ -355,7 +370,8 @@ export function ProjectManager() {
                   variants={itemVariants}
                   layout
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="card-hover bg-card border border-border rounded-xl p-5 flex flex-col gap-4"
+                  className="card-hover bg-card border border-border rounded-xl p-5 flex flex-col gap-4 cursor-pointer hover:border-emerald-500/30 transition-all duration-200"
+                  onClick={() => setShowcaseProject(project)}
                 >
                   {/* Title + links */}
                   <div className="flex items-start justify-between gap-2">
@@ -369,6 +385,7 @@ export function ProjectManager() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <Github className="size-4" />
                         </a>
@@ -379,6 +396,7 @@ export function ProjectManager() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <ExternalLink className="size-4" />
                         </a>
@@ -464,7 +482,10 @@ export function ProjectManager() {
                       variant="ghost"
                       size="sm"
                       className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => openEdit(project)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEdit(project);
+                      }}
                     >
                       <Pencil className="size-3.5" />
                       Edit
@@ -474,7 +495,10 @@ export function ProjectManager() {
                       size="sm"
                       className="h-8 text-xs text-muted-foreground hover:text-rose-400"
                       disabled={deletingId === project.id}
-                      onClick={() => handleDelete(project.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(project.id);
+                      }}
                     >
                       {deletingId === project.id ? (
                         <Loader2 className="size-3.5 animate-spin" />
@@ -588,34 +612,63 @@ export function ProjectManager() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="proj-arch">System Architecture</Label>
+              <Input
+                id="proj-arch"
+                placeholder="e.g. Client-Server, Microservices, Event-Driven"
+                value={form.architecture}
+                onChange={(e) => setForm((f) => ({ ...f, architecture: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="proj-testing">Testing Strategy</Label>
+              <Input
+                id="proj-testing"
+                placeholder="e.g. Jest Unit Tests, Playwright E2E"
+                value={form.testing}
+                onChange={(e) => setForm((f) => ({ ...f, testing: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="proj-doc">Documentation / Setup Instructions</Label>
+              <Textarea
+                id="proj-doc"
+                placeholder="Step-by-step setup guides or notes..."
+                value={form.documentation}
+                onChange={(e) => setForm((f) => ({ ...f, documentation: e.target.value }))}
+                rows={3}
+              />
+            </div>
+
             {/* Skills Multi-Select */}
             {skills.length > 0 && (
               <div className="space-y-3">
                 <Label>Related Skills</Label>
-                <ScrollArea className="max-h-48 rounded-md border border-border p-3">
-                  <div className="space-y-2">
-                    {skills.map((skill) => (
-                      <label
-                        key={skill.id}
-                        className="flex items-center gap-2 cursor-pointer text-sm"
+                <div className="max-h-48 overflow-y-auto rounded-md border border-border p-3 space-y-2">
+                  {skills.map((skill) => (
+                    <label
+                      key={skill.id}
+                      className="flex items-center gap-2 cursor-pointer text-sm"
+                    >
+                      <Checkbox
+                        checked={form.skillIds.includes(skill.id)}
+                        onCheckedChange={() => toggleSkill(skill.id)}
+                      />
+                      <span className="text-muted-foreground">
+                        {skill.name}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] text-muted-foreground ml-auto"
                       >
-                        <Checkbox
-                          checked={form.skillIds.includes(skill.id)}
-                          onCheckedChange={() => toggleSkill(skill.id)}
-                        />
-                        <span className="text-muted-foreground">
-                          {skill.name}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] text-muted-foreground ml-auto"
-                        >
-                          {skill.category}
-                        </Badge>
-                      </label>
-                    ))}
-                  </div>
-                </ScrollArea>
+                        {skill.category}
+                      </Badge>
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -636,6 +689,177 @@ export function ProjectManager() {
               {editingId ? 'Save Changes' : 'Create Project'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Showcase / Detail Dialog ────────────────────────────────────────── */}
+      <Dialog open={!!showcaseProject} onOpenChange={(open) => !open && setShowcaseProject(null)}>
+        <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto bg-card/95 border border-border/85 backdrop-blur-md">
+          {showcaseProject && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <FolderCode className="size-6 text-emerald-400" />
+                  <DialogTitle className="text-xl font-bold text-foreground">
+                    {showcaseProject.name}
+                  </DialogTitle>
+                </div>
+                <DialogDescription>
+                  Full project showcase and implementation details
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6 py-4">
+                {/* Basic Details */}
+                {showcaseProject.description && (
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                      Description
+                    </h4>
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {showcaseProject.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Tech Stack */}
+                {parseTechnologies(showcaseProject.technologies).length > 0 && (
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                      Technologies
+                    </h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {parseTechnologies(showcaseProject.technologies).map((t) => (
+                        <Badge
+                          key={t}
+                          variant="outline"
+                          className="text-xs text-emerald-400 border-emerald-500/30"
+                        >
+                          {t}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Architecture & Testing */}
+                {(showcaseProject.architecture || showcaseProject.testing) && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {showcaseProject.architecture && (
+                      <div className="bg-secondary/20 p-3 rounded-lg border border-border/40 space-y-1">
+                        <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">
+                          Architecture
+                        </span>
+                        <p className="text-xs text-foreground font-medium">
+                          {showcaseProject.architecture}
+                        </p>
+                      </div>
+                    )}
+                    {showcaseProject.testing && (
+                      <div className="bg-secondary/20 p-3 rounded-lg border border-border/40 space-y-1">
+                        <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">
+                          Testing Strategy
+                        </span>
+                        <p className="text-xs text-foreground font-medium">
+                          {showcaseProject.testing}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Documentation / Instructions */}
+                {showcaseProject.documentation && (
+                  <div className="space-y-1.5 bg-secondary/10 p-4 rounded-lg border border-border/40">
+                    <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                      Documentation & Setup
+                    </h4>
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed font-mono">
+                      {showcaseProject.documentation}
+                    </p>
+                  </div>
+                )}
+
+                {/* Complexity & Difficulty */}
+                <div className="grid grid-cols-2 gap-4 border-t border-border/50 pt-4">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Complexity
+                    </span>
+                    <div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'text-[10px] uppercase',
+                          complexityBadgeClass(showcaseProject.complexity)
+                        )}
+                      >
+                        {showcaseProject.complexity}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Difficulty Rating
+                    </span>
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <span className={difficultyColor(showcaseProject.difficulty)}>
+                        {showcaseProject.difficulty}/10
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Skills highlighted */}
+                {showcaseProject.skills && showcaseProject.skills.length > 0 && (
+                  <div className="space-y-1.5 border-t border-border/50 pt-4">
+                    <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                      Demonstrated Skills
+                    </h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {showcaseProject.skills.map((ps) => (
+                        <Badge
+                          key={ps.skill.id}
+                          variant="secondary"
+                          className="text-xs bg-muted"
+                        >
+                          {ps.skill.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Project Links */}
+                {(showcaseProject.githubUrl || showcaseProject.liveUrl) && (
+                  <div className="flex items-center gap-3 border-t border-border/50 pt-4">
+                    {showcaseProject.githubUrl && (
+                      <Button variant="outline" size="sm" asChild className="gap-1.5 text-xs h-8">
+                        <a href={showcaseProject.githubUrl} target="_blank" rel="noopener noreferrer">
+                          <Github className="size-3.5" />
+                          Code Repository
+                        </a>
+                      </Button>
+                    )}
+                    {showcaseProject.liveUrl && (
+                      <Button variant="outline" size="sm" asChild className="gap-1.5 text-xs h-8">
+                        <a href={showcaseProject.liveUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="size-3.5" />
+                          Live Demo
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="border-t border-border/50 pt-3">
+                <Button variant="outline" size="sm" onClick={() => setShowcaseProject(null)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </motion.div>

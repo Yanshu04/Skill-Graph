@@ -20,12 +20,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { title, company, startDate, endDate, description } = body;
 
+    if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
+
+    // Safely parse dates — LLM may return empty strings or the literal "null"
+    const parseDate = (val: unknown): Date | null => {
+      if (!val || val === "null" || val === "present" || val === "Present") return null;
+      const d = new Date(String(val));
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const parsedStart = parseDate(startDate);
+
     const exp = await db.experience.create({
       data: {
         title,
         company: company || null,
-        startDate: new Date(startDate),
-        endDate: endDate ? new Date(endDate) : null,
+        startDate: parsedStart ?? new Date(),
+        endDate: parseDate(endDate),
         description: description || null,
         userId,
       },

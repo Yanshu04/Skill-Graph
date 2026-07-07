@@ -20,6 +20,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(body.difficulty !== undefined && { difficulty: body.difficulty }),
         ...(body.githubUrl !== undefined && { githubUrl: body.githubUrl }),
         ...(body.liveUrl !== undefined && { liveUrl: body.liveUrl }),
+        ...(body.documentation !== undefined && { documentation: body.documentation }),
+        ...(body.testing !== undefined && { testing: body.testing }),
       },
     });
 

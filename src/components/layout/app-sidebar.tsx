@@ -19,6 +19,8 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Share2,
+  Crosshair,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -28,9 +30,11 @@ const navItems: { id: AppPage; label: string; icon: React.ElementType }[] = [
   { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "coach", label: "AI Coach", icon: Sparkles },
   { id: "analysis", label: "Gap Analysis", icon: Target },
+  { id: "career-targets", label: "Career Targets", icon: Crosshair },
   { id: "timeline", label: "Timeline", icon: Clock },
   { id: "certificates", label: "Certificates", icon: Award },
   { id: "resume", label: "Resume", icon: FileText },
+  { id: "portfolio", label: "Portfolio/Resume", icon: Share2 },
   { id: "profile", label: "Profile", icon: UserCircle },
 ];
 

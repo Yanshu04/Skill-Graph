@@ -212,3 +212,19 @@
   box-shadow: 0 0 20px oklch(0.696 0.17 162.48 / 0.1);
   transform: translateY(-1px);
 }
+
+/* Premium text marquee for overflowing names */
+@keyframes marquee {
+  0%, 10% { transform: translateX(0); }
+  50%, 60% { transform: translateX(var(--scroll-x, 0)); }
+  90%, 100% { transform: translateX(0); }
+}
+
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.group:hover .animate-marquee {
+  animation: marquee var(--marquee-duration, 5s) ease-in-out infinite;
+}

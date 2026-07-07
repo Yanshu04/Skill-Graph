@@ -22,7 +22,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,6 +35,7 @@ interface ExtractedSkill {
   category: string;
   proficiency: number;
   confidence: number;
+  evidence?: string;
   selected: boolean;
 }
 
@@ -56,6 +56,8 @@ interface ExtractedProject {
 
 interface ExtractedCertificate {
   title: string;
+  issuingOrg?: string;
+  completionDate?: string;
   selected: boolean;
 }
 
@@ -105,6 +107,7 @@ export function ResumeUpload() {
   const [resumes, setResumes] = useState<ResumeFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch existing resumes
@@ -127,10 +130,18 @@ export function ResumeUpload() {
 
   // File handling
   const handleFile = useCallback((file: File) => {
+    // Client-side validation: reject non-.txt files
     if (!file.name.endsWith('.txt') && file.type !== 'text/plain') {
-      toast.error('Please upload a .txt file');
+      toast.error('Only .txt files are supported in this phase. PDFs and images are disabled.');
       return;
     }
+    // Client-side validation: reject files > 1MB
+    if (file.size > 1 * 1024 * 1024) {
+      toast.error('File size exceeds the 1MB limit.');
+      return;
+    }
+    
+    setSelectedFile(file);
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result;
@@ -172,16 +183,38 @@ export function ResumeUpload() {
 
   // Extract skills
   const handleExtract = async () => {
-    const text = activeTab === 'upload' ? uploadText : pasteText;
-    if (!text.trim()) {
-      toast.error('Please provide resume text first');
-      return;
-    }
-
+    let text = activeTab === 'upload' ? uploadText : pasteText;
+    
     setExtracting(true);
     setResults(null);
 
     try {
+      // If uploading a file, upload to storage first to run server validations and store
+      if (activeTab === 'upload' && selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        const uploadRes = await fetch('/api/resume/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json();
+          throw new Error(errData.error || 'Upload failed');
+        }
+
+        const uploadData = await uploadRes.json();
+        text = uploadData.content;
+        setUploadText(text);
+      }
+
+      if (!text.trim()) {
+        toast.error('Please provide resume text first');
+        setExtracting(false);
+        return;
+      }
+
       const res = await fetch('/api/ai/extract-skills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -195,13 +228,17 @@ export function ResumeUpload() {
       // Normalize with selected=true
       const result: ExtractionResult = {
         summary: data.summary ?? '',
-        skills: (data.skills ?? []).map((s: Record<string, unknown>) => ({
-          name: String(s.name ?? ''),
-          category: String(s.category ?? 'General'),
-          proficiency: Number(s.proficiency ?? 50),
-          confidence: Number(s.confidence ?? 50),
-          selected: true,
-        })),
+        skills: (data.skills ?? []).map((s: Record<string, unknown>) => {
+          const rawConf = Number(s.confidence ?? 0.7);
+          return {
+            name: String(s.name ?? ''),
+            category: String(s.category ?? 'General'),
+            proficiency: Number(s.proficiency ?? 50),
+            confidence: rawConf > 1 ? rawConf / 100 : rawConf,
+            evidence: s.evidence ? String(s.evidence) : undefined,
+            selected: true,
+          };
+        }),
         experiences: (data.experiences ?? []).map(
           (exp: Record<string, unknown>) => ({
             title: String(exp.title ?? ''),
@@ -220,6 +257,8 @@ export function ResumeUpload() {
         certificates: (data.certificates ?? []).map(
           (c: Record<string, unknown>) => ({
             title: String(c.title ?? ''),
+            issuingOrg: c.issuingOrg ? String(c.issuingOrg) : undefined,
+            completionDate: c.completionDate ? String(c.completionDate) : undefined,
             selected: true,
           })
         ),
@@ -227,8 +266,8 @@ export function ResumeUpload() {
 
       setResults(result);
       toast.success('Skills extracted successfully');
-    } catch {
-      toast.error('Failed to extract skills. Please try again.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to extract skills. Please try again.');
     } finally {
       setExtracting(false);
     }
@@ -278,43 +317,63 @@ export function ResumeUpload() {
     setImporting(true);
 
     try {
-      // Import skills
-      const selectedSkills = results.skills.filter((s) => s.selected);
-      if (selectedSkills.length > 0) {
-        await Promise.allSettled(
-          selectedSkills.map((s) =>
-            fetch('/api/skills', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: s.name,
-                category: s.category,
-                proficiency: s.proficiency,
-              }),
-            })
+      // Import skills — filter out any without a name (LLM can return empty strings)
+      const selectedSkills = results.skills.filter((s) => s.selected && s.name?.trim());
+      const skillResults = selectedSkills.length > 0
+        ? await Promise.allSettled(
+            selectedSkills.map((s) =>
+              fetch('/api/skills', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: s.name,
+                  category: s.category,
+                  proficiency: s.proficiency,
+                  confidence: s.confidence,
+                }),
+              }).then((r) => { if (!r.ok) throw new Error('skill'); return r; })
+            )
           )
-        );
-      }
+        : [];
 
-      // Import experiences
-      const selectedExp = results.experiences.filter((e) => e.selected);
-      if (selectedExp.length > 0) {
-        await Promise.allSettled(
-          selectedExp.map((e) =>
-            fetch('/api/experiences', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                title: e.title,
-                company: e.company,
-                startDate: e.startDate,
-                endDate: e.endDate,
-                description: e.description,
-              }),
-            })
+      // Import experiences — filter out those without a title
+      const selectedExp = results.experiences.filter((e) => e.selected && e.title?.trim());
+      const expResults = selectedExp.length > 0
+        ? await Promise.allSettled(
+            selectedExp.map((e) =>
+              fetch('/api/experiences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: e.title,
+                  company: e.company,
+                  startDate: e.startDate || null,
+                  endDate: e.endDate || null,
+                  description: e.description,
+                }),
+              }).then((r) => { if (!r.ok) throw new Error('exp'); return r; })
+            )
           )
-        );
-      }
+        : [];
+
+      // Import certificates — filter out those without a title
+      const selectedCerts = results.certificates.filter((c) => c.selected && c.title?.trim());
+      const certResults = selectedCerts.length > 0
+        ? await Promise.allSettled(
+            selectedCerts.map((c) =>
+              fetch('/api/certificates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: c.title,
+                  issuingOrg: c.issuingOrg || null,
+                  completionDate: c.completionDate || null,
+                  skills: [],
+                }),
+              }).then((r) => { if (!r.ok) throw new Error('cert'); return r; })
+            )
+          )
+        : [];
 
       // Save resume reference
       const text = activeTab === 'upload' ? uploadText : pasteText;
@@ -328,9 +387,28 @@ export function ResumeUpload() {
         }),
       });
 
-      toast.success(
-        `Imported ${selectedSkills.length} skills, ${selectedExp.length} experiences`
-      );
+      const importedSkills = skillResults.filter((r) => r.status === 'fulfilled').length;
+      const importedExp   = expResults.filter((r) => r.status === 'fulfilled').length;
+      const importedCerts = certResults.filter((r) => r.status === 'fulfilled').length;
+      const totalFailed   =
+        skillResults.filter((r) => r.status === 'rejected').length +
+        expResults.filter((r) => r.status === 'rejected').length +
+        certResults.filter((r) => r.status === 'rejected').length;
+
+      const parts = [
+        importedSkills > 0 && `${importedSkills} skill${importedSkills !== 1 ? 's' : ''}`,
+        importedExp > 0    && `${importedExp} experience${importedExp !== 1 ? 's' : ''}`,
+        importedCerts > 0  && `${importedCerts} certificate${importedCerts !== 1 ? 's' : ''}`,
+      ].filter(Boolean).join(', ');
+
+      if (totalFailed > 0) {
+        toast.success(
+          `Imported ${parts || 'nothing'}. (${totalFailed} item${totalFailed !== 1 ? 's' : ''} skipped — may already exist)`
+        );
+      } else {
+        toast.success(`Imported ${parts || 'nothing'} successfully!`);
+      }
+
       setResults(null);
       setUploadText('');
       setPasteText('');
@@ -339,8 +417,9 @@ export function ResumeUpload() {
       const res = await fetch('/api/resume');
       const data = await res.json();
       setResumes(Array.isArray(data) ? data : []);
-    } catch {
-      toast.error('Failed to import items');
+    } catch (err) {
+      console.error('Import error:', err);
+      toast.error('Failed to import items. Please try again.');
     } finally {
       setImporting(false);
     }
@@ -505,8 +584,10 @@ export function ResumeUpload() {
             initial="hidden"
             animate="visible"
             exit="hidden"
-            className="space-y-6"
+            className="flex flex-col gap-0"
           >
+            {/* Scrollable content area */}
+            <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-1 pb-2">
             {/* Summary */}
             {results.summary && (
               <motion.div variants={itemVariants}>
@@ -533,13 +614,12 @@ export function ResumeUpload() {
                     Extracted Skills ({results.skills.length})
                   </h3>
                 </div>
-                <ScrollArea className="max-h-64">
-                  <div className="space-y-2 pr-4">
+                <div className="space-y-2">
                     {results.skills.map((skill, idx) => (
                       <label
                         key={idx}
                         className={cn(
-                          'flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors',
+                          'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors',
                           skill.selected
                             ? 'border-emerald-500/30 bg-emerald-500/5'
                             : 'border-border bg-card hover:bg-muted/50'
@@ -548,6 +628,7 @@ export function ResumeUpload() {
                         <Checkbox
                           checked={skill.selected}
                           onCheckedChange={() => toggleSkill(idx)}
+                          className="mt-0.5"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
@@ -566,14 +647,18 @@ export function ResumeUpload() {
                               Proficiency: {skill.proficiency}%
                             </span>
                             <span className="text-[10px] text-muted-foreground">
-                              Confidence: {skill.confidence}%
+                              Confidence: {Math.round(skill.confidence * 100)}%
                             </span>
                           </div>
+                          {skill.evidence && (
+                            <div className="text-[10px] text-muted-foreground/80 mt-2 bg-secondary/30 px-2 py-1 rounded border border-border/30 italic">
+                              "{skill.evidence}"
+                            </div>
+                          )}
                         </div>
                       </label>
                     ))}
                   </div>
-                </ScrollArea>
               </motion.div>
             )}
 
@@ -586,8 +671,7 @@ export function ResumeUpload() {
                     Extracted Experiences ({results.experiences.length})
                   </h3>
                 </div>
-                <ScrollArea className="max-h-64">
-                  <div className="space-y-2 pr-4">
+                <div className="space-y-2">
                     {results.experiences.map((exp, idx) => (
                       <label
                         key={idx}
@@ -623,7 +707,6 @@ export function ResumeUpload() {
                       </label>
                     ))}
                   </div>
-                </ScrollArea>
               </motion.div>
             )}
 
@@ -636,8 +719,7 @@ export function ResumeUpload() {
                     Extracted Projects ({results.projects.length})
                   </h3>
                 </div>
-                <ScrollArea className="max-h-48">
-                  <div className="space-y-2 pr-4">
+                <div className="space-y-2">
                     {results.projects.map((proj, idx) => (
                       <label
                         key={idx}
@@ -664,7 +746,6 @@ export function ResumeUpload() {
                       </label>
                     ))}
                   </div>
-                </ScrollArea>
               </motion.div>
             )}
 
@@ -677,8 +758,7 @@ export function ResumeUpload() {
                     Extracted Certificates ({results.certificates.length})
                   </h3>
                 </div>
-                <ScrollArea className="max-h-40">
-                  <div className="space-y-2 pr-4">
+                <div className="space-y-2">
                     {results.certificates.map((cert, idx) => (
                       <label
                         key={idx}
@@ -697,13 +777,12 @@ export function ResumeUpload() {
                       </label>
                     ))}
                   </div>
-                </ScrollArea>
               </motion.div>
             )}
+            </div>{/* end scrollable content */}
 
-            {/* Import Button */}
-            <motion.div variants={itemVariants}>
-              <Separator className="bg-border mb-4" />
+            {/* Import Button — sticky footer, always visible */}
+            <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t border-border pt-4 mt-4 z-10">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
                   <FileCheck className="size-4 inline mr-1.5 text-emerald-400" />
@@ -722,7 +801,7 @@ export function ResumeUpload() {
                   {importing ? 'Importing...' : 'Import Selected'}
                 </Button>
               </div>
-            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

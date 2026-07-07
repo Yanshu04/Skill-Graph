@@ -18,11 +18,13 @@ export async function POST(request: NextRequest) {
     const userId = await getSessionUserId();
     if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     const body = await request.json();
-    const { role, targetSkills } = body;
+    const { role, company, deadline, targetSkills } = body;
 
     const target = await db.careerTarget.create({
       data: {
         role,
+        company: company || null,
+        deadline: deadline ? new Date(deadline) : null,
         targetSkills: JSON.stringify(targetSkills || []),
         userId,
       },

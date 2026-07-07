@@ -13,7 +13,9 @@ import { ProjectManager } from "@/components/projects/project-manager";
 import { LearningTimeline } from "@/components/timeline/learning-timeline";
 import { CertificateManager } from "@/components/certificates/certificate-manager";
 import { ResumeUpload } from "@/components/resume/resume-upload";
+import { PortfolioGenerator } from "@/components/portfolio/portfolio-generator";
 import { ProfileSettings } from "@/components/profile/profile-settings";
+import { CareerTargetManager } from "@/components/career-targets/career-target-manager";
 import { Button } from "@/components/ui/button";
 import { PanelLeftOpen } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,6 +32,8 @@ const pageComponents: Record<AppPage, React.ComponentType> = {
   certificates: CertificateManager,
   resume: ResumeUpload,
   profile: ProfileSettings,
+  portfolio: PortfolioGenerator,
+  "career-targets": CareerTargetManager,
   auth: AuthPage,
 };
 
@@ -85,7 +89,20 @@ export default function Home() {
               </Tooltip>
             )}
             <h1 className="text-lg font-semibold capitalize hidden sm:block">
-              {currentPage === "coach" ? "AI Career Coach" : currentPage === "resume" ? "Resume Scanner" : currentPage}
+              {{
+                coach: "AI Career Coach",
+                resume: "Resume Scanner",
+                analysis: "Gap Analysis",
+                portfolio: "Portfolio & Resume",
+                "career-targets": "Career Targets",
+                dashboard: "Dashboard",
+                skills: "Skills",
+                projects: "Projects",
+                timeline: "Learning Timeline",
+                certificates: "Certificates",
+                profile: "Profile Settings",
+                auth: "Sign In",
+              }[currentPage] ?? currentPage}
             </h1>
           </div>
           <div className="flex items-center gap-2">
