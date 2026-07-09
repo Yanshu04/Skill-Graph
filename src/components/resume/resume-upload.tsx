@@ -356,6 +356,26 @@ export function ResumeUpload() {
           )
         : [];
 
+      // Import projects — filter out those without a name
+      const selectedProjects = results.projects.filter((p) => p.selected && p.name?.trim());
+      const projectResults = selectedProjects.length > 0
+        ? await Promise.allSettled(
+            selectedProjects.map((p) =>
+              fetch('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: p.name,
+                  description: p.description || null,
+                  technologies: [],
+                  complexity: 'medium',
+                  difficulty: 5,
+                }),
+              }).then((r) => { if (!r.ok) throw new Error('project'); return r; })
+            )
+          )
+        : [];
+
       // Import certificates — filter out those without a title
       const selectedCerts = results.certificates.filter((c) => c.selected && c.title?.trim());
       const certResults = selectedCerts.length > 0
@@ -387,18 +407,21 @@ export function ResumeUpload() {
         }),
       });
 
-      const importedSkills = skillResults.filter((r) => r.status === 'fulfilled').length;
-      const importedExp   = expResults.filter((r) => r.status === 'fulfilled').length;
-      const importedCerts = certResults.filter((r) => r.status === 'fulfilled').length;
-      const totalFailed   =
+      const importedSkills    = skillResults.filter((r) => r.status === 'fulfilled').length;
+      const importedExp        = expResults.filter((r) => r.status === 'fulfilled').length;
+      const importedProjects   = projectResults.filter((r) => r.status === 'fulfilled').length;
+      const importedCerts      = certResults.filter((r) => r.status === 'fulfilled').length;
+      const totalFailed        =
         skillResults.filter((r) => r.status === 'rejected').length +
         expResults.filter((r) => r.status === 'rejected').length +
+        projectResults.filter((r) => r.status === 'rejected').length +
         certResults.filter((r) => r.status === 'rejected').length;
 
       const parts = [
-        importedSkills > 0 && `${importedSkills} skill${importedSkills !== 1 ? 's' : ''}`,
-        importedExp > 0    && `${importedExp} experience${importedExp !== 1 ? 's' : ''}`,
-        importedCerts > 0  && `${importedCerts} certificate${importedCerts !== 1 ? 's' : ''}`,
+        importedSkills   > 0 && `${importedSkills} skill${importedSkills !== 1 ? 's' : ''}`,
+        importedExp      > 0 && `${importedExp} experience${importedExp !== 1 ? 's' : ''}`,
+        importedProjects > 0 && `${importedProjects} project${importedProjects !== 1 ? 's' : ''}`,
+        importedCerts    > 0 && `${importedCerts} certificate${importedCerts !== 1 ? 's' : ''}`,
       ].filter(Boolean).join(', ');
 
       if (totalFailed > 0) {
